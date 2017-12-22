@@ -105,39 +105,28 @@ function setupPlot(plot, data, yvar) {
 		
 	 // setup line function
 	 var buildLine = d3.line()//.curve(d3.curveCardinal)
-	 		.defined(function(d, i, j) { // j allows you too look forward and backward on whole data
-				if(i == 0){
-					return true;
-				} else {
-					var prev = j[i-1];
-					var future = j[i+1];
-					var diff = d.startyear - prev.startyear;
-					return diff == 1;
-				}
-			})
-			.x(function(d) { return xScale(d.startyear); })
+	 		.x(function(d) { return xScale(d.startyear); })
 			.y(function(d) { return yScale(d[yvar]); });
-	
-	// setup line function
-	var buildGapLine = d3.line()//.curve(d3.curveCardinal)
-		// .defined(function(d, i, j) { // j allows you too look forward and backward on whole data
-		// 		if(i == 0){
-		// 			return false;
-		// 		} else {
-		// 			var prev = j[i-1];
-		// 			var future = j[i+1];
-		// 			var diff = d.startyear - prev.startyear;
-		// 			return diff !== 1;
-		// 		}
-		// })
-		.x(function(d) { return xScale(d.startyear); })
-		.y(function(d) { return yScale(d[yvar]); });
 
 	// organize data by team
 	var databyteam = d3.nest()
     	.key(function(d) { return d.team; })
 		.entries(data);
-    
+	var sequentialdata = databyteam.map(function(d) {
+		var filteredvalues = d.values.filter(isNotGap);
+		return({ // need to return new object b/c d.values = d.values.filter() overwrites databyteam
+			key: d.key,
+			values: filteredvalues,
+		});
+	});
+	var gapdata = databyteam.map(function(d) {
+		var filteredvalues = d.values.filter(isGap);
+		return({ // need to return new object b/c d.values = d.values.filter() overwrites databyteam
+			key: d.key,
+			values: filteredvalues,
+		});
+	});
+	
 	// add points
 	var pts_g = plot.append("g");
 	pts_g.selectAll(".datapt")
@@ -152,12 +141,12 @@ function setupPlot(plot, data, yvar) {
 	
 	// add line styled for gaps
 	var gaps_g = plot.append("g");
-	gaps_g.selectAll(".teamlinegaps")
-		.data(databyteam)
+	gaps_g.selectAll(".teamlinegap")
+		.data(gapdata)
 		.enter()
   		.append("path")
-		.attr("class", "teamlinegaps")
-		.attr("d", function(d) { return buildGapLine(d.values); })
+		.attr("class", "teamlinegap")
+		.attr("d", function(d) { return buildLine(d.values); })
 		.style("stroke", function(d) { return colorScale(d.key); })
 		.style("stroke-dasharray", "3,3")
 		.style("fill", "none");
@@ -165,7 +154,7 @@ function setupPlot(plot, data, yvar) {
 	// add lines overtop of gaps
 	var lines_g = plot.append("g");
 	lines_g.selectAll(".teamline")
-		.data(databyteam)
+		.data(sequentialdata)
 		.enter()
   		.append("path")
 		.attr("class", "teamline")
@@ -268,7 +257,21 @@ function updatePlot(plot, data, yvar) {
 	// organize data by team
 	var databyteam = d3.nest()
     	.key(function(d) { return d.team; })
-    	.entries(data);
+		.entries(data);
+	var sequentialdata = databyteam.map(function(d) {
+		var filteredvalues = d.values.filter(isNotGap);
+		return({ // need to return new object b/c d.values = d.values.filter() overwrites databyteam
+			key: d.key,
+			values: filteredvalues,
+		});
+	});
+	var gapdata = databyteam.map(function(d) {
+		var filteredvalues = d.values.filter(isGap);
+		return({ // need to return new object b/c d.values = d.values.filter() overwrites databyteam
+			key: d.key,
+			values: filteredvalues,
+		});
+	});
 
 	plot.selectAll(".datapt")
 		.data(data)
@@ -280,8 +283,19 @@ function updatePlot(plot, data, yvar) {
 		.attr("cy", function(d) { return yScale(d[yvar]); })
 		.style("fill", function(d) { return colorScale(d.team); });	
 
+	// add line styled for gaps
+	plot.selectAll(".teamlinegap")
+		.data(gapdata)
+		.transition()
+		.duration(duration_time)
+		.delay(function(d, i) { return i * 10; })
+		.attr("d", function(d) { return buildLine(d.values); })
+		.style("stroke", function(d) { return colorScale(d.key); })
+		.style("stroke-dasharray", "3,3")
+		.style("fill", "none");
+
 	plot.selectAll(".teamline")
-		.data(databyteam)  
+		.data(sequentialdata)  
 		.transition()
 		.duration(duration_time)
 		.delay(function(d, i) { return i * 10; })
@@ -299,7 +313,51 @@ function updatePlot(plot, data, yvar) {
 
 	plot.selectAll(".datapt").exit().remove();
 	plot.selectAll(".teamline").exit().remove();
+	plot.selectAll(".teamlinegap").exit().remove();
 	plot.selectAll(".teamlineinvisible").exit().remove();
 
 	return plot;
+}
+
+function isGap(d, i, j){
+	if(j.length == 1){ // skip everything if theres' only one value (can't have gaps!)
+		return false;
+	} else if(i == 0){ // first value in array
+		var future = j[i+1];
+		var diff_after = future.startyear - d.startyear;
+		return diff_after != 1;
+	} else if(i < (j.length-1)){ //need to use j.length-1 since arrays are 0-indexed
+		var prev = j[i-1];
+		var future = j[i+1];
+		var diff_before = d.startyear - prev.startyear,
+			diff_after = future.startyear - d.startyear;
+		return diff_before != 1 || diff_after != 1;
+	} else if (i == (j.length-1)){ // last value in array
+		var prev = j[i-1];
+		var diff_before = d.startyear - prev.startyear;
+		return diff_before != 1;
+	}
+}
+
+function isNotGap(d, i, j){ 
+//can't just do !isGap because we need to include the outer points, not exclude them
+// e.g if data is [1998, 1999, 2007], isGap will filter to [1999, 2007]
+// but !isGap will only return [1998], but we need [1998, 1999] to create the line.
+	if(j.length == 1){ // skip everything if theres' only one value (can't have gaps!)
+		return true;
+	} else if(i == 0){ // first value in array
+		var future = j[i+1];
+		var diff_after = future.startyear - d.startyear;
+		return diff_after == 1;
+	} else if(i < (j.length-1)){ //need to use j.length-1 since arrays are 0-indexed
+		var prev = j[i-1];
+		var future = j[i+1];
+		var diff_before = d.startyear - prev.startyear,
+			diff_after = future.startyear - d.startyear;
+		return diff_before == 1 || diff_after == 1;
+	} else if (i == (j.length-1)){ // last value in array
+		var prev = j[i-1];
+		var diff_before = d.startyear - prev.startyear;
+		return diff_before == 1;
+	}
 }
