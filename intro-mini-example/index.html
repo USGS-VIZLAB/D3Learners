@@ -8,42 +8,56 @@
   <body>
     <script>
 
-var svg = d3.select("body")
-  .append("svg")
-    .attr("id", "plotarea")
+// setup the svg inside <body></body>
+var svg = d3.select("body") // first, you need to create a d3 selection
+  // then you can add elements to that selection
+  .append("svg") 
+    // after the "append", the appended elements are the selection you are changing
+    // in subsequent commands, hence the indent in the following commands
+    .attr("id", "plotarea") // add attributes: <svg></svg> becomes <svg id="plotarea"></svg>
     .attr("width", 800)
     .attr("height", 800);
 
-
+// define an array of data
 var flow = [6, 10, 11, 50, 2];
 
-console.log(flow);
-console.log(flow.length);
-console.log(flow[0]);
+// look at the data in the browser console (inside developer tools)
+console.log(flow); // result: [6,10,11,50,2]
+console.log(flow.length); // result: 5
+console.log(flow[0]); // result: 6 because it's zero-indexed!
 
-// d3.select("#plotarea") or svg
+// to add points to the svg, you need to manipulate the svg d3 selection
+// in our case, we saved that selection as the variable `svg` above
+// but since we added an id, you could also re-select using the id: d3.select("#plotarea")
 var points = svg
-  .selectAll("circle")
-    .data(flow);
+  // create a d3 selection of all circles within the <svg></svg>
+  // this should happen even if there are not any circles yet
+  .selectAll("circle") 
+    .data(flow); // attach data to the d3 selection
     
-points
-  .enter()
-  .append("circle")
-    .classed("flowpoint", true)
-    .attr("transform", function(d, i) {
-      return "translate(" + (100*(i+1)) + "," + 100 + ")";
+points // reference the d3 selection + data saved in this var
+  .enter() // add data to the enter phase
+  .append("circle") // actually add <circle> elements based on the data in the enter phase
+    .classed("flowpoint", true) // allows > 1 class but .attr("class", "flowpoint") only allows 1
+    // move circles away from top left corner (0,0)
+    // and space so that they are in a row and not on top of each other
+    // anonymous function arg `d` refers to the data, and `i` refers to the index
+    .attr("transform", function(d, i) { 
+      return "translate(" + (100*(i+1)) + "," + 100 + ")"; 
     })
+    // use anonymous function to size the circle radii based on the data
     .attr("r", function(d) { 
       return d;
     })
+    // use anonymous function to manipulate the appearence of the circle when you hover
     .on("mouseover", function() {
-      d3.select(this)
+      d3.select(this) // `this` is a special d3 keyword meaning the current node (aka current circle)
         .attr("stroke", "orange")
         .attr("stroke-width", 5);
     })
     .on("mouseout", function() {
       d3.select(this)
-        .attr("stroke", null)
+        .attr("stroke", null) // use null to remove the attributes on mouseout
         .attr("stroke-width", null);
     });
     
